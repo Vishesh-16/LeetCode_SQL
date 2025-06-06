@@ -11,3 +11,10 @@ limit 1
 
 ----------------------------------------------------------------------------------------------------------
 
+SELECT person_name,
+       SUM(weight) OVER (ORDER BY Turn) AS total_weight
+FROM Queue
+QUALIFY total_weight <= 1000
+ORDER BY total_weight DESC
+LIMIT 1;
+
