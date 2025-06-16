@@ -1,0 +1,110 @@
+
+# Write your MySQL query statement below
+
+select season, category, total_quantity, total_revenue
+from
+(
+ select *,
+       dense_rank()over(partition by season order by total_quantity desc, total_revenue desc) as ranked
+ from
+ (
+  select category, season, sum(quantity) as total_quantity, sum(revenue) as total_revenue
+  from
+  ( 
+   select tb1.product_id, category, season,quantity, revenue
+   from
+   (
+    select product_id, case 
+                        when month(sale_date) in (12, 1, 2) then "Winter"
+                        when month(sale_date) in (3, 4, 5) then "Spring"
+                        when month(sale_date) in (6, 7, 8) then "Summer"
+                        when month(sale_date) in (9, 10, 11) then "Fall"
+                       end as "season",
+                      quantity,
+                      quantity * price as revenue
+    from sales
+   )tb1 
+  join products p on tb1.product_id = p.product_id
+  )tb2
+ group by 1,2
+ )tb3
+)tb4
+
+where ranked = 1
+order by season
+
+---------------------------------------------------------------------------------------------------------
+
+SELECT season, category, total_quantity, total_revenue
+FROM (
+    SELECT category, season,
+           SUM(quantity) AS total_quantity,
+           SUM(quantity * price) AS total_revenue,
+           DENSE_RANK() OVER (
+               PARTITION BY 
+                   CASE 
+                       WHEN MONTH(s.sale_date) IN (12, 1, 2) THEN 'Winter'
+                       WHEN MONTH(s.sale_date) IN (3, 4, 5) THEN 'Spring'
+                       WHEN MONTH(s.sale_date) IN (6, 7, 8) THEN 'Summer'
+                       WHEN MONTH(s.sale_date) IN (9, 10, 11) THEN 'Fall'
+                   END
+               ORDER BY SUM(quantity) DESC, SUM(quantity * price) DESC
+           ) AS ranked
+    FROM sales s
+    JOIN products p ON s.product_id = p.product_id
+    GROUP BY season, category
+) AS ranked_table
+WHERE ranked = 1
+ORDER BY season;
+
+---------------------------------------------------------------------------------------------------------
+| Feature             | Your Version (Subqueries)         | CTE Version                    |
+| ------------------- | --------------------------------- | ------------------------------ |
+| **Output**          | ✅ Correct                         | ✅ Correct                      |
+| **Performance**     | ⚡ Slightly faster (\~0.00186s)    | ⚡ Slightly slower (\~0.00191s) |
+| **Readability**     | ❌ Hard to trace with `tb1`, `tb2` | ✅ Clear with named stages      |
+| **Maintainability** | ❌ Tricky to debug nested queries  | ✅ Easier to isolate logic      |
+
+---------------------------------------------------------------------------------------------------------
+CTE VErsion----
+---------------------------------------------------------------------------------------------------------
+
+WITH sales_with_season AS (
+    SELECT 
+        s.product_id,
+        p.category,
+        CASE 
+            WHEN MONTH(s.sale_date) IN (12, 1, 2) THEN 'Winter'
+            WHEN MONTH(s.sale_date) IN (3, 4, 5) THEN 'Spring'
+            WHEN MONTH(s.sale_date) IN (6, 7, 8) THEN 'Summer'
+            WHEN MONTH(s.sale_date) IN (9, 10, 11) THEN 'Fall'
+        END AS season,
+        s.quantity,
+        s.quantity * s.price AS revenue
+    FROM sales s
+    JOIN products p ON s.product_id = p.product_id
+),
+aggregated AS (
+    SELECT 
+        category, 
+        season,
+        SUM(quantity) AS total_quantity,
+        SUM(revenue) AS total_revenue
+    FROM sales_with_season
+    GROUP BY category, season
+),
+ranked AS (
+    SELECT *,
+        DENSE_RANK() OVER (
+            PARTITION BY season 
+            ORDER BY total_quantity DESC, total_revenue DESC
+        ) AS ranked
+    FROM aggregated
+)
+SELECT season, category, total_quantity, total_revenue
+FROM ranked
+WHERE ranked = 1
+ORDER BY season;
+
+
+
