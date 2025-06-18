@@ -1,3 +1,7 @@
+--------------------------------------------------------------------------------------------------------------------------------
+**Second Query (Correlated Subquery)**  
+--------------------------------------------------------------------------------------------------------------------------------
+
 select l.book_id,title,author,genre,publication_year,count(borrower_name) as current_borrowers
 from library_books l join borrowing_records b 
 on l.book_id = b.book_id
@@ -5,3 +9,40 @@ where return_date is null
 group by 1
 having count(borrower_name) = (select total_copies from library_books where book_id = l.book_id)
 order by 6 desc,2 
+
+--------------------------------------------------------------------------------------------------------------------------------
+**First Query (Derived Table)**
+--------------------------------------------------------------------------------------------------------------------------------
+
+select book_id,
+       title,
+       author,
+       genre,
+       publication_year,
+       current_borrowers
+from
+(select l.book_id,
+       title,
+       author,
+       genre,
+       publication_year,
+       total_copies,
+       count(borrower_name) as current_borrowers
+from library_books l join borrowing_records b 
+on l.book_id = b.book_id
+where return_date is null
+group by 1,2,3,4,5
+having count(borrower_name) = total_copies)tb1
+order by current_borrowers desc, title
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+| Aspect                       | **First Query (Derived Table)**                                         | **Second Query (Correlated Subquery)**                                    | ✅ Verdict |
+| ---------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------- |
+| **Readability**              | Clear separation of logic via subquery `tb1`                            | Slightly harder to trace due to inline subquery                           | ✅ First   |
+| **Grouping**                 | Groups on all selected fields (`GROUP BY 1,2,3,4,5`)                    | Only `GROUP BY 1` (book\_id) — technically incorrect in MySQL strict mode | ✅ First   |
+| **Subquery Cost**            | No correlated subquery — derived table handles `total_copies` elegantly | Uses a correlated subquery in `HAVING` (runs per row)                     | ✅ First   |
+| **Performance (MySQL)**      | More optimized by optimizer, fewer nested lookups                       | Correlated subquery can be expensive on large datasets                    | ✅ First   |
+| **Portability (PostgreSQL)** | More portable — strict grouping is compatible                           | Fails under PostgreSQL unless all non-aggregated fields are grouped       | ✅ First   |
+| **ORDER BY clarity**         | Uses column alias (`current_borrowers`) safely                          | Uses positional reference (`order by 6`) — less readable                  | ✅ First   |
+
